@@ -1,0 +1,305 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+
+.app { padding: 2rem 1rem; max-width: 640px; margin: 0 auto; }
+
+.header { text-align: center; margin-bottom: 2.5rem; }
+.header h1 { font-size: 22px; font-weight: 500; color: var(--color-text-primary); letter-spacing: -0.3px; }
+.header p { font-size: 14px; color: var(--color-text-secondary); margin-top: 6px; }
+
+.drop-zone {
+  border: 1.5px dashed var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  background: var(--color-background-primary);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  background: var(--color-background-secondary);
+  border-color: var(--color-border-primary);
+}
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-zone i { font-size: 28px; color: var(--color-text-tertiary); display: block; margin-bottom: 10px; }
+.drop-zone .label { font-size: 14px; color: var(--color-text-secondary); }
+.drop-zone .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+.file-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.file-card i { font-size: 18px; color: var(--color-text-secondary); flex-shrink: 0; }
+.file-card .name { font-size: 13px; font-family: var(--font-mono); color: var(--color-text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-card .size { font-size: 12px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.file-card .remove { background: none; border: none; cursor: pointer; color: var(--color-text-tertiary); padding: 2px; line-height: 1; border-radius: 4px; }
+.file-card .remove:hover { color: var(--color-text-danger); background: var(--color-background-danger); }
+
+.section-label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin: 1.5rem 0 0.5rem; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 11px;
+  border-radius: var(--border-radius-md);
+  font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+  border: none;
+}
+.btn:active { transform: scale(0.99); }
+.btn-primary { background: var(--color-text-primary); color: var(--color-background-primary); }
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.progress-wrap { margin-top: 1.5rem; display: none; }
+.progress-bar-track { height: 3px; background: var(--color-background-secondary); border-radius: 99px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: var(--color-text-primary); border-radius: 99px; width: 0; transition: width 0.2s; }
+.progress-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 6px; font-family: var(--font-mono); min-height: 18px; }
+
+.stream-list { margin-top: 1rem; max-height: 140px; overflow: hidden; position: relative; }
+.stream-list::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, var(--color-background-primary)); }
+.stream-item { font-size: 12px; font-family: var(--font-mono); color: var(--color-text-tertiary); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+.stream-item i { font-size: 12px; color: var(--color-text-success); }
+
+.result-card {
+  margin-top: 1.5rem; display: none;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.25rem;
+  text-align: center;
+}
+.result-card .big-num { font-size: 36px; font-weight: 500; color: var(--color-text-primary); }
+.result-card .sub { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+
+.error-msg { margin-top: 10px; font-size: 13px; color: var(--color-text-danger); display: none; padding: 10px 14px; background: var(--color-background-danger); border-radius: var(--border-radius-md); }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<div class="app">
+  <h2 class="sr-only">Herramienta para renombrar imágenes a partir de un archivo Excel</h2>
+
+  <div class="header">
+    <h1>Renombrador de imágenes</h1>
+    <p>Sube tu Excel y una imagen — genera un .zip con todas las copias renombradas</p>
+  </div>
+
+  <p class="section-label">Archivo Excel (.xlsx)</p>
+  <div class="drop-zone" id="drop-excel" ondragover="onDrag(event,'drop-excel')" ondragleave="offDrag('drop-excel')" ondrop="onDrop(event,'excel')">
+    <input type="file" accept=".xlsx,.xls" onchange="onFile(event,'excel')" id="inp-excel">
+    <i class="ti ti-table" aria-hidden="true"></i>
+    <div class="label">Arrastra o haz clic para elegir</div>
+    <div class="hint">.xlsx · .xls</div>
+  </div>
+  <div id="excel-card" style="display:none"></div>
+
+  <p class="section-label" style="margin-top:1.25rem">Imagen base</p>
+  <div class="drop-zone" id="drop-img" ondragover="onDrag(event,'drop-img')" ondragleave="offDrag('drop-img')" ondrop="onDrop(event,'img')">
+    <input type="file" accept="image/*" onchange="onFile(event,'img')" id="inp-img">
+    <i class="ti ti-photo" aria-hidden="true"></i>
+    <div class="label">Arrastra o haz clic para elegir</div>
+    <div class="hint">jpg · png · webp · gif · bmp</div>
+  </div>
+  <div id="img-card" style="display:none"></div>
+
+  <div style="margin-top: 1rem;">
+    <p class="section-label" style="margin-top:0; margin-bottom: 6px;">Configuración</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div>
+        <label style="font-size:12px; color:var(--color-text-secondary); display:block; margin-bottom:4px;">Columna (ej: A)</label>
+        <input type="text" id="col-input" value="A" maxlength="3" style="width:100%; font-family:var(--font-mono); text-transform:uppercase;">
+      </div>
+      <div>
+        <label style="font-size:12px; color:var(--color-text-secondary); display:block; margin-bottom:4px;">Hoja (número)</label>
+        <input type="number" id="sheet-input" value="1" min="1" style="width:100%;">
+      </div>
+    </div>
+  </div>
+
+  <div id="error-msg" class="error-msg"></div>
+
+  <button class="btn btn-primary" id="run-btn" onclick="run()" disabled style="margin-top:1.5rem;">
+    <i class="ti ti-zip" aria-hidden="true"></i> Generar ZIP
+  </button>
+
+  <div class="progress-wrap" id="prog-wrap">
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="prog-fill"></div></div>
+    <div class="progress-label" id="prog-label">Procesando...</div>
+    <div class="stream-list" id="stream-list"></div>
+  </div>
+
+  <div class="result-card" id="result-card">
+    <div class="big-num" id="res-num">0</div>
+    <div class="sub" id="res-sub">imágenes creadas</div>
+    <button class="btn btn-primary" id="dl-btn" style="margin-top:1.25rem; width:auto; padding:10px 24px; margin:1.25rem auto 0;">
+      <i class="ti ti-download" aria-hidden="true"></i> Descargar ZIP
+    </button>
+  </div>
+</div>
+
+<script>
+let state = { excel: null, img: null };
+let zipBlob = null;
+
+function fmt(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+function iconFor(type) { return type === 'excel' ? 'ti-table' : 'ti-photo'; }
+
+function renderCard(type) {
+  const f = state[type];
+  const id = type === 'excel' ? 'excel-card' : 'img-card';
+  const el = document.getElementById(id);
+  if (!f) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="file-card">
+    <i class="ti ${iconFor(type)}" aria-hidden="true"></i>
+    <span class="name">${f.name}</span>
+    <span class="size">${fmt(f.size)}</span>
+    <button class="remove" onclick="clearFile('${type}')" aria-label="Quitar archivo"><i class="ti ti-x" style="font-size:14px"></i></button>
+  </div>`;
+  checkReady();
+}
+
+function clearFile(type) {
+  state[type] = null;
+  const id = type === 'excel' ? 'excel-card' : 'img-card';
+  document.getElementById(id).style.display = 'none';
+  document.getElementById(type === 'excel' ? 'inp-excel' : 'inp-img').value = '';
+  checkReady();
+}
+
+function checkReady() {
+  document.getElementById('run-btn').disabled = !(state.excel && state.img);
+}
+
+function onFile(e, type) {
+  const f = e.target.files[0];
+  if (!f) return;
+  state[type] = f;
+  renderCard(type);
+}
+
+function onDrag(e, id) { e.preventDefault(); document.getElementById(id).classList.add('drag-over'); }
+function offDrag(id) { document.getElementById(id).classList.remove('drag-over'); }
+
+function onDrop(e, type) {
+  e.preventDefault();
+  const id = type === 'excel' ? 'drop-excel' : 'drop-img';
+  offDrag(id);
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  state[type] = f;
+  renderCard(type);
+}
+
+function sanitize(name) { return String(name).replace(/[\/\\?%*:|"<>]/g, '-').trim(); }
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function clearError() { document.getElementById('error-msg').style.display = 'none'; }
+
+function setProgress(pct, label) {
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-label').textContent = label;
+}
+
+function addStream(name) {
+  const list = document.getElementById('stream-list');
+  const item = document.createElement('div');
+  item.className = 'stream-item';
+  item.innerHTML = `<i class="ti ti-check" aria-hidden="true"></i><span>${name}</span>`;
+  list.prepend(item);
+}
+
+async function run() {
+  clearError();
+  document.getElementById('result-card').style.display = 'none';
+  zipBlob = null;
+
+  const col = document.getElementById('col-input').value.trim().toUpperCase() || 'A';
+  const sheetIdx = Math.max(0, parseInt(document.getElementById('sheet-input').value || '1') - 1);
+
+  const progWrap = document.getElementById('prog-wrap');
+  progWrap.style.display = 'block';
+  document.getElementById('stream-list').innerHTML = '';
+  setProgress(5, 'Leyendo Excel...');
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+
+  try {
+    const excelBuf = await state.excel.arrayBuffer();
+    const wb = XLSX.read(excelBuf, { type: 'array' });
+
+    if (sheetIdx >= wb.SheetNames.length) throw new Error(`La hoja ${sheetIdx+1} no existe. El archivo tiene ${wb.SheetNames.length} hoja(s).`);
+
+    const ws = wb.Sheets[wb.SheetNames[sheetIdx]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const colIndex = col.charCodeAt(0) - 65;
+    const names = data.map(r => r[colIndex]).filter(v => v !== undefined && v !== null && v !== '');
+
+    if (names.length === 0) throw new Error(`No se encontraron datos en la columna ${col} de la hoja ${sheetIdx+1}.`);
+
+    setProgress(20, `${names.length} nombres encontrados. Leyendo imagen...`);
+
+    const imgBuf = await state.img.arrayBuffer();
+    const ext = state.img.name.includes('.') ? '.' + state.img.name.split('.').pop() : '';
+    const excelBase = state.excel.name.replace(/\.[^.]+$/, '');
+
+    setProgress(35, 'Creando ZIP...');
+
+    const zip = new JSZip();
+    const folder = zip.folder('imagenes');
+
+    for (let i = 0; i < names.length; i++) {
+      const fname = sanitize(names[i]) + ext;
+      folder.file(fname, imgBuf);
+      addStream(fname);
+      setProgress(35 + Math.round((i+1)/names.length * 55), `Agregando ${i+1} / ${names.length}...`);
+      if (i % 20 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+
+    setProgress(92, 'Comprimiendo...');
+    await new Promise(r => setTimeout(r, 0));
+
+    zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+
+    setProgress(100, 'Listo.');
+
+    const dlBtn = document.getElementById('dl-btn');
+    dlBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(zipBlob);
+      a.download = excelBase + '.zip';
+      a.click();
+    };
+
+    document.getElementById('res-num').textContent = names.length;
+    document.getElementById('res-sub').textContent = `imagen${names.length !== 1 ? 's' : ''} generada${names.length !== 1 ? 's' : ''} → ${excelBase}.zip`;
+    document.getElementById('result-card').style.display = 'block';
+
+  } catch(err) {
+    showError(err.message);
+    progWrap.style.display = 'none';
+  }
+
+  btn.disabled = !(state.excel && state.img);
+}
+</script>
